@@ -1,10 +1,13 @@
 use battleship::board::{self, Board, Shot};
 use battleship::data::{self, ShipSpec};
 use battleship::ui;
+use std::io;
+use std::io::Write;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
-
+const PRACTICE_PATH: &str = "data/board/practice.txt";
 const FLEET_PATH: &str = "data/fleet.txt";
+const SCORES_PATH: &str = "dta/scores.txt";
 // TODO (Task 6): add SCORES_PATH ("data/scores.txt").
 // TODO (Task 8): add PRACTICE_PATH ("data/boards/practice.txt").
 const TOP_N: usize = 5;
@@ -12,7 +15,7 @@ const TOP_N: usize = 5;
 fn main() {
     // TODO (Task 5): replace default_fleet() with data::load_fleet(FLEET_PATH),
     // then delete default_fleet from data.rs.
-    let fleet = data::default_fleet();
+    let fleet = data::load_fleet(FLEET_PATH);
     if fleet.is_empty() {
         println!("No fleet loaded. Check {FLEET_PATH}.");
         return;
@@ -38,14 +41,26 @@ fn main() {
 }
 
 // Print the best scores, highest first, or a message if there are none.
-fn show_top_scores(n: usize) {
+pub fn show_top_scores(n: usize) {
+    let mut records = data::load_scores(SCORES_PATH);
+    println!("TOP 5");
+   
+    if records.is_empty() {
+        println!(" no scores yet");
+    } else {
+        data::sort_scores_desc(&mut records);
+        for (i, record) in records.iter().take(n).enumerate() {
+            println!("{:>2}. {:<15} {:>4}", i + 1, record.name, record.score);
+        }
+    }
+}
+
     // TODO (Task 9): load the scores; print "TOP n"; if there are none print
     // "  no scores yet"; otherwise sort with data::sort_scores_desc and print up
     // to n lines like
     //  1. Ana              83
-    println!("TOP {n}");
-    println!("  (high scores are not shown yet)");
-}
+    
+
 
 // A scored game against a randomly placed fleet.
 fn play_game(fleet: &[ShipSpec]) {
@@ -55,23 +70,57 @@ fn play_game(fleet: &[ShipSpec]) {
         println!("The fleet does not fit on the board. Check {FLEET_PATH}.");
         return;
     }
+
     if let Some(shots) = play_round(&mut board) {
-        let score = board::score_for(shots);
-        println!("All ships sunk in {shots} shots. Score: {score}");
-        // TODO (Task 10): if score > 0, ask for a name with ui::prompt, build a
+        println!("You cleared the board in {} shots!", shots);
+        print!("Enter your name for the high score list: ");
+        io::stdout().flush().unwrap();
+   
+        let mut name = String::new();
+        io::stdin().read_line(&mut name).unwrap();
+        let name = name.trim();
+
+        if !name.is_empty() {
+            let record = data::ScoreRecord {
+                name: name.to_string(),
+                score: shots,
+            
+            };
+            if data::append_score(SCORES_PATH, &record) {
+                println!("Score saved!");
+            } else {
+                println!("Failed to save score.");
+            }
+        } else {
+            println!("No name entered. Score not saved.");
+        }
+     }
+} 
+     // TODO (Task 10): if score > 0, ask for a name with ui::prompt, build a
         // ScoreRecord (add it to the `use` line), and save it with
         // data::append_score. Print "Score saved." only when it returns true.
-    }
-}
+    
 
 // An unscored game on the fixed layout in the practice file.
 fn practice_game() {
+   match data::load_board(PRACTICE_PATH) {
+      Some(mut board) => {
+          if let Some(shots) = play_round(&mut board) {
+              println!("Practice board cleared in {} shots. Practice is not scored.", shots);
+          }
+      }
+      _none => {
+          println!("Practice board unavailable.");
+      }
+   }
+}
+
     // TODO (Task 8): load the board with data::load_board(PRACTICE_PATH). On
     // Some(mut board), play it with play_round and print
     // "Practice board cleared in N shots." when play_round returns Some(N).
     // On None, print "Practice board unavailable."
-    println!("Practice mode is not available yet.");
-}
+    
+
 
 // Fire until every ship is sunk. Returns the number of shots, or None if the
 // player types "quit". PROVIDED.
